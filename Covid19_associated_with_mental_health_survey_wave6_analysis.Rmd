@@ -1,0 +1,676 @@
+---
+title: "__Examining the Impact of COVID-19 on Mental Health and Substance Use among Canadians__"
+subtitle: "__Assignment 1 | R markdown__"
+author:
+  name: "Author: Le Thanh Nguyen"
+  affiliation: |
+    * MSc eHealth program 
+    * DeGroote School of Business, McMaster University 
+    * Github page: https://github.com/thanhnguyen3849 
+date: "`r format(Sys.time(), '%d %B %Y')`" 
+output:
+  bookdown::html_document2:
+    number_sections: TRUE
+    code_folding: hide
+    df_print: kable
+    toc: true
+    toc_float: 
+      toc_collapsed: true
+    theme: spacelab
+    highlight: zenburn
+---
+<p style="color:green">__NB: This document is my original work. No code nor text has been copied from any other student__</p> 
+
+```{r setup, eval=TRUE, include=FALSE}  
+knitr::opts_chunk$set( echo=TRUE, warning=FALSE, message=FALSE, error=FALSE, comment = NA )
+options(max.print = 10000)
+options(scipen = 999)
+```  
+
+```{r "basic_packages" }
+pacman::p_load(psych, xray , ggplot2, texreg, DT, excelR, plotly, wrapr, sjmisc, sjlabelled, sjstats, sjPlot, dplyr, forcats,  knitr, kableExtra, captioner, tidyverse, magick, stringr, Rmisc, gridExtra, bookdown, ggthemes)
+```   
+  
+```{r "colorize", echo=FALSE, results="hide"}
+colorize <- function(x, color) {
+  if (knitr::is_latex_output()) {
+    sprintf("\\textcolor{%s}{%s}", color, x)
+  } else if (knitr::is_html_output()) {
+    sprintf("<span style='color: %s;'>%s</span>", color, 
+      x)
+  } else x
+}
+```  
+  
+```{r  include=FALSE, echo=FALSE}
+fig_nums <- captioner(prefix="Figure ", auto_space=FALSE, levels = 1, type = c("n", "n", "n"), infix = ".")
+tab_nums <- captioner(prefix="Table ",  auto_space=FALSE, levels = 1, type = c("n", "n", "n"), infix = ".")
+
+tab_nums("data_table", "Table  ",  display="cite")
+fig_nums("roc_ggplot", "The  ",  display="cite")
+ 
+citef <- pryr::partial(tab_nums, display = "cite")
+```   
+
+```{r  include=FALSE, echo=FALSE}
+bump(fig_nums, level=1)
+bump(tab_nums, level=1)
+```      
+
+# BACKGROUND
+
+In a series of national surveys, CAMH and research technology company Delvinia led research to understand the mental health and substance use impacts of COVID-19, and to track changes as the pandemic unfolded [1]. The following interactive dashboard represents selected findings based on online surveys conducted over the following intervals:
+
+* __Wave 1__: May 8 to 12, 2020, with 1,005 respondents
+* __Wave 2__: May 29 to June 1, 2020, with 1,002 respondents 
+* __Wave 3__: June 19 to 23, 2020 with 1,005 respondents
+* __Wave 4__: July 10 to 14, 2020 with 1,003 respondents
+* __Wave 5__: September 18 to 22, 2020, with 1,003 respondents
+* __Wave 6__: November 27 to December 1, 2020 with 1,003 respondents
+* __Wave 7__: March 19 to 23, 2021 with 1,000 respondents
+* __Wave 8__: July 9 to 13 2021, with 1,001 respondents
+* __Wave 9__: January 7 to 11, 2022, with 1,004 respondents
+
+All survey participants were English-speaking Canadians ages 18 and older [1].
+
+__Below are some key findings for this particular study, wave 6.__
+
+Data source: [CAMH Studies Mental Health over Coronavirus Pandemic](https://www.delvinia.com/camh-coronavirus-mental-health/)
+
+```{r, fig.cap= "The Delvinia Website",  fig.width = 9, fig.height = 9}
+knitr::include_graphics("https://i.imgur.com/BmTwhaW.png")
+```
+
+# OBJECTIVES
+
+In this report, I employ the different packages in R and various functions to generate firstly the initial analysis of the data, and second the subsequent steps to prepare data for analysis. I use the the dataset provided by the 6th wave of the CAMH study to generate insights regarding:
+
+* The dataset itself
+* The study's research results
+
+
+# METHODOLOGY - SELECT THE DATA
+
+In this report, I use RStudio to scrutinize the data and generate descriptive analyses using relevant packages. Some of the packages that I use and their functions are:
+
+1. `r colorize("__dplyr__", "blue")`: A powerful and efficient data manipulation package that provides a set of tools for filtering, grouping, and summarizing data. It is particularly useful for working with large datasets and is widely used in data wrangling tasks.
+
+2. `r colorize("__ggplot2__", "blue")`: A data visualization package that provides a flexible and powerful way to create a wide range of static and interactive plots. It is widely used for creating high-quality data visualizations and is particularly useful for exploratory data analysis.
+
+3. `r colorize("__pacman__", "blue")`: An R package management tool, which provides a convenient way to install and manage R packages, similar to the package manager on Linux and MacOS. It is a wrapper around the basic functionality provided by the "install.packages()" function and provides a more user-friendly interface for installing, updating, and removing packages.
+
+## Import the dataset and the datamap
+The data and the datamap for CAMH study wave 6th were imported.
+
+```{r "import dataset and datamap from cloud"}
+camh <- read.csv("http://bus-sawtooth.mcmaster.ca/eH705_BLENDED_W2020/CAMH_wave6_nl.csv")
+camh_dm <- read.csv("http://bus-sawtooth.mcmaster.ca/eH705_BLENDED_W2020/camh_Q.csv")
+```
+
+```{r Table1}
+kable(camh_dm, caption = "The datamap of the survey") %>%
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left", fixed_thead = T) %>%
+  scroll_box(width = "800px", height = "500px")
+
+```
+
+## Trim and filter only important variables
+
+```{r "overview structure of the given dataframe", inlcude = TRUE, echo=TRUE, results='hide'}
+str(camh)
+view(camh)
+```
+
+A brief overview shows that there are __1003 observations of 66 variables__ in this dataframe. I will limit my work to the following __17 variables__ only:
+
+* hAge ( Age_group),
+* Gender (male, female, other),
+* Q4_1, Q4_3, Q4_5,
+* Q5 (switch coding 1->4, 2->3, 3->2, 4->1),
+* Q8x1 - Q8x3,
+* Q15,
+* Q17,
+* Q20x1, Q20x2, Q20x3,
+* Q25 Education
+* Q26 Marital status
+* Q27 Ethnicity/Race
+
+```{r Table2}
+camh_select <- camh %>% select(Age_group, 
+                               Gender, 
+                               Q4_1_me_covid_test_pos, 
+                               Q4_3_me_covid_symptoms_no_test, 
+                               Q4_5_me_covid_test_neg, 
+                               Q5_fin_worry,
+                               Q8x1_nervous_frq, 
+                               Q8x2_not_stop_worry_frq, 
+                               Q8x3_worry_diff_frq, 
+                               Q15_alcohol, 
+                               Q17_alcohol_frq, 
+                               Q20x1_depressed_frq, 
+                               Q20x2_lonely_frq, 
+                               Q20x3_hopeful_frq, 
+                               Q25_Education, 
+                               Q26_marital, 
+                               Q27_race)
+
+head(camh_select) %>%
+  knitr::kable(caption = "New dataframe of only 17 variables of interest") %>%
+  kable_classic() %>%
+  scroll_box(width = "800px", height = "300px")
+```
+
+I switched coding for Q5 - "How worried are you about the impact of COVID-19 on your personal financial situation?" as per instruction (switch coding 1->4, 2->3, 3->2, 4->1). 
+
+```{r Table3}
+camh_new = camh_select %>% mutate(Q5_fin_worry=recode(Q5_fin_worry, '1' = 4, '2' = 3, '3' = 2, '4' = 1))
+
+head(camh_new)%>%
+  knitr::kable(caption = "New dataframe of switched codes") %>%
+  kable_classic()  %>%
+  scroll_box(width = "800px", height = "300px")
+```
+## Renaming the variables
+
+I also rename the variable in this new dataframe to enhance clarity and comprehensiveness. 
+
+```{r Table4}
+colnames(camh_new) <- c("age_group",
+                        "gender",
+                        "covid_positive",
+                        "covid_no_test",
+                        "covid_test_negative",
+                        "financial_worry",
+                        "nervous_frq",
+                        "not_stop_worry_frq",
+                        "worry_diff_frq",
+                        "alcohol_drink",
+                        "alcohol_frq",
+                        "depressed_frq",
+                        "lonely_frq",
+                        "hopeful_frq",
+                        "education",
+                        "marital",
+                        "race")
+head(camh_new) %>%
+  knitr::kable(caption = "New dataframe of selected variables renamed") %>%
+    kable_classic()  %>%
+  scroll_box(width = "800px", height = "300px")
+```
+
+# FINDINGS
+
+## Findings - Observations from srutinizing the data
+
+Now the data is prepared, I carry on to examine the data, identify any missing values, or any errors in the collected data.
+
+```{r Table5}
+knitr::kable(describe(camh_new), caption = "Summary statistic of the dataframe") %>%
+  kable_classic_2()
+```
+
+```{r Table6}
+camh_new_ano <- anomalies(camh_new)
+knitr::kable(camh_new_ano$variables, caption = "The structure of the missing values") %>%
+  kable_classic_2()
+```
+
+```{r Figure1, fig.cap= "Plot frequencies of the variables in the dataset", fig.height = 20, fig.width = 30}
+#create an empty list
+plots <- list()
+
+#create loops
+for (i in colnames(camh_new)){
+  value <- camh_new[[i]]
+  variable_plot <- plot_frq(value) + labs(x = i)
+  plots[[i]] <- variable_plot
+}
+
+#arrange the plots together
+multiplot(plotlist = plots, cols = 5, layout = NULL)
+```
+
+Observations on scrutinizing the data:
+
+* `r colorize("__There is no N/A value in the dataframe of interest__", "red")`
+* For Q15_alcohol, "0" which can be an anomalous value in other dataset, for this partcicular case, the value is use to distinct the "non_alcohol" drinkers from "alcohol" drinkers but did not consume alcohol within the 7 days of the survey. 
+* For some variables, existing extreme values like "95","96", and "99" which skew the distribution and affecting the mean values (Such as Q15 and Q17 regarding the alcohol consumption).
+* For other variables in this dataframe, they are __categorical__, which means the value is limited and usually based on a particular finite group. However, for __"Q15- During the PAST 7 DAYS, on how many days did you drink ALCOHOL?"__, there are both __continuous values__ (The number of days people drinking) and the __categorical values__ ("I do not drink alcohol" and "Prefer not to answer"). 
+* Therefore, for question __"Q15- During the PAST 7 DAYS, on how many days did you drink ALCOHOL?"__, there are three groups of respondents:
+  1. _People who drink alcohol_ (Corresponding to answer from 0 - 7)
+  2. _People who do NOT drink alcohol_ (Corresponding to answer 99 - "I do not drink alcohol")
+  3. _People who choose not to answer the question_ (Corresponding to answer 96 - Prefer not to answer")
+* So I will break Q15 into 3 categories accordingly. And within the first category, I will maintain the numeric values for further analysis. The third category, I identify it as `r colorize("__not applicable or n/a__", "red")` and thus, will proceed to remove them. 
+* The rest of the data was fine
+
+## Findings - missing values
+
+### Remove n/a values
+
+I change value "96" from Q15 into ___n/a___ and remove those ___n/a___ entries from the dataframe. 
+This is only to demonstrate how to remove n/a from a dataset. Otherwise can use the subset() function to remove entries associated with the "96" value.
+
+The new data frame from now will be referred to as "camh_clean". Now there is only `r colorize("__999 observations__","blue")`
+
+```{r Table7}
+camh_clean <- camh_new
+
+camh_clean$alcohol_drink[camh_clean$alcohol_drink == 96] <- NA
+camh_clean <- na.omit(camh_clean)
+
+kable(frq(camh_clean$alcohol_drink, out = "t"), caption = "Removing n/a values") %>%
+  kable_classic() %>% kable_styling(full_width = FALSE)
+```
+
+### Remove unnecessary data
+
+For some questions, there are the "Preferred not to answer" option, which coded by "96"; as well as "Not sure" coded by "97", and they occupy less than 5% of the total observations. Therefore, I will remove observations that have a value of "96" and "97" to make the data more relevant.
+
+Now there is only `r colorize("__954 observations__","blue")`
+
+```{r Table8}
+camh_clean2 <- subset(camh_clean, !rowSums(camh_clean == 96))
+camh_clean2 <- filter(camh_clean2, !rowSums(camh_clean2 == 97))
+#an example: 
+kable(frq(camh_clean2$race, out = "t"), caption = "Removing unnecessary data") %>%
+  kable_classic() %>% kable_styling(full_width = FALSE)
+```
+
+
+## Findings - Recoding
+
+Data in the "camh_new" dataframe will be recoded, following the instructions in the new datamap, "20-3082-DATAMAP.xlsx".
+
+### Recode Demographic variables
+
+Demographic variables will be decoded directly (without creating the factor forms, as we do not need their numeric values for calculation) such as:
+
+* Age groups
+* Genders
+* Covid status (Variable 3 -5)
+* Education level
+* Marital status
+* Race/ Ethnicity
+
+```{r Table9}
+camh_label = camh_clean2 %>%
+  mutate(age_group=recode(age_group,
+                          '1' = "18-39",
+                          '2' = "40-59",
+                          '3' = "60+"),
+         gender=recode(gender,
+                       '1' = "Male",
+                       '2' = "Female",
+                       '3' = "Other"),
+         covid_positive=recode(covid_positive,
+                               '1' = "No",
+                               '2' = "Yes"),
+         covid_no_test=recode(covid_no_test,
+                              '1' = "No",
+                               '2' = "Yes"),
+         covid_test_negative=recode(covid_test_negative,
+                                    '1' = "No",
+                                    '2' = "Yes"),
+         education=recode(education,
+                          '1' = "Did not graduate from high school",
+                          '2' = "Completed high school",
+                          '3' = "Post-high school education",
+                          '4' = "College diploma/degree",
+                          '5' = "University diploma/degree"),
+         marital=recode(marital,
+                        '1' = "Married",
+                        '2' = "Living with a partner",
+                        '3' = "Widowed",
+                        '4' = "Divorced",
+                        '5' = "Separated",
+                        '6' = "Never married"),
+         race=recode(race,
+                     '1' = "Asian - East",
+                     '2' = "Asian - South",
+                     '3' = "Asian - South East",
+                     '4' = "Black",
+                     '5' = "Indigenous",
+                     '6' = "Latin American",
+                     '7' = "Middle Eastern",
+                     '8' = "White",
+                     '9' = "Mixed heritage",
+                     '10' = "Other"))
+
+knitr::kable(head(camh_label), caption = "Recode Demographic variables") %>%
+  kable_classic()  %>%
+  scroll_box(width = "800px", height = "300px")
+```
+
+### Recode Non-Demographic variables
+
+Non-demographic variables will be decoded by creating a factor forms, namely:
+
+* Financial worry
+* Nervous frequency
+* Not stop worry frequency
+* Worry different things frequency
+* Alcohol consumption frequency
+* Depressed frequency
+* Lonely frequency
+* Hopeful frequency
+
+```{r Table10}
+camh_label$financial_worry_factored <- factor(camh_label$financial_worry, 
+                                              levels = c(1,2,3,4), 
+                                              labels = c("Not at all worried", "Not very worried", "Some what worried", "Very worried"))
+camh_label$nervous_frq_factored <- factor(camh_label$nervous_frq, 
+                                          levels = c(1,2,3,4), 
+                                          labels = c("Not at all", "Several days", "Over half the days", "Nearly everyday"))
+camh_label$not_stop_worry_factored <- factor(camh_label$not_stop_worry_frq, 
+                                             levels = c(1,2,3,4), 
+                                             labels = c("Not at all", "Several days", "Over half the days", "Nearly everyday"))
+camh_label$worry_diff_factored <- factor(camh_label$worry_diff_frq, 
+                                         levels = c(1,2,3,4), 
+                                         labels = c("Not at all", "Several days", "Over half the days", "Nearly everyday"))
+camh_label$alcohol_frq_factored <- factor(camh_label$alcohol_frq,
+                                          levels = c(1,2,3,4,5), 
+                                          labels = c("Drink much more", "Drink slightly more", "No change", "Drink slightly less", "Drink much less"))
+camh_label$depressed_frq_factored <- factor(camh_label$depressed_frq,
+                                            levels = c(1,2,3,4), 
+                                            labels = c("Rarely or none", "Some or little", "Occasionally", "Most/All the time"))
+camh_label$lonely_frq_factored <- factor(camh_label$lonely_frq,
+                                            levels = c(1,2,3,4), 
+                                            labels = c("Rarely or none", "Some or little", "Occasionally", "Most/All the time"))
+camh_label$hopeful_frq_factored <- factor(camh_label$hopeful_frq,
+                                            levels = c(1,2,3,4), 
+                                            labels = c("Rarely or none", "Some or little", "Occasionally", "Most/All the time"))
+
+knitr::kable(head(camh_label), caption = "Recode Non-Demographic variables") %>%
+  kable_classic()  %>%
+  scroll_box(width = "800px", height = "300px")
+```
+
+
+### Recode Q15 into 2 categories "Drinking" and "No drinking"
+
+Values in question 15 will be re-coded into 2 different categories:
+
+1. ___People who drink alcohol___ (Corresponding to answer from 0 - 7)
+2. ___People who do NOT drink alcohol___ (Corresponding to answer 99 - "I do not drink alcohol")
+
+```{r Table11}
+camh_label$alcohol_drink_cat <- if_else(camh_label$alcohol_drink %in% c(0,1,2,3,4,5,6,7), "Drinking",
+                                        ifelse(camh_label$alcohol_drink %in% c(99), "Not drinking", NA))
+sum(is.na(camh_label))
+camh_label_new <- camh_label[,-(6:14)]
+knitr::kable(head(camh_label_new), caption = "Clean data set ready for analysis") %>%
+  kable_classic() 
+```
+
+## Findings - Visualizing variables and explanation
+
+### Demographic profiles of the respondents to the survey wave 6th
+
+```{r Table12}
+df_1 <- camh_label_new[1:3]
+
+demo_covid_yes <- table(subset(df_1, covid_positive == "Yes")[, c("age_group", "gender")])
+demo_covid_no <- table(subset(df_1, covid_positive == "No")[, c("age_group", "gender")])
+
+
+kable(demo_covid_yes, caption = "Number of respondents infected with COVID-19") %>%
+  kable_classic() %>%
+  kable_styling(full_width = T, position = "left") %>%
+  add_header_above(bold = TRUE, align = "c", c(" " = 2, "Infected with COVID" = 1))
+```
+
+
+```{r Table13}
+kable(demo_covid_no, caption = "Number of respondents not infected with COVID-19") %>%
+  kable_classic() %>%
+  kable_styling(full_width = T, position = "left") %>%
+  add_header_above(bold = TRUE, align = "c", c(" " = 2, "No COVID" = 2))
+```
+
+```{r Figure2, fig.cap= "Graph of COVID-19 status of survey respondents" , fig.width=15, fig.height=8}
+graph_1 <- 
+  ggplot(df_1, aes(x = gender, fill = gender)) +
+  geom_bar() +
+  geom_text(aes(label = after_stat(count)), inherit.aes = TRUE, stat='count', vjust=-1) +
+  facet_wrap(~ covid_positive, scales = "free_x") +
+  labs(x = "Gender", y = "Number of respondents", fill = "Gender") +
+  labs(title = "COVID-19 positive rate of survey respondents by genders") +
+  theme_hc() + scale_fill_hc()
+graph_2 <- 
+  ggplot(df_1, aes(x = age_group, fill = age_group)) +
+  geom_bar() +
+  geom_text(aes(label = after_stat(count)), inherit.aes = TRUE, stat='count', vjust=-1) +
+  facet_wrap(~ covid_positive, scales = "free_x") +
+  labs(x = "Age groups", y = "Number of respondents", fill = "Age groups") +
+  labs(title = "COVID-19 positive rate of survey respondents by age groups") +
+  theme_hc() + scale_fill_hc()
+multiplot(graph_1, graph_2, layout=matrix(c(1,2), nrow=1, byrow=TRUE))
+```
+
+From Table \@ref(tab:Table12), Table \@ref(tab:Table13), and Figure \@ref(fig:Figure2) above, we can see that the majority of people took part in this survey were not COVID-19, be it asymptomatic or have been tested. There are people with confirmed COVID-19 infection, but their number is too small to be accounted for, at __6 people over the total of 954 responses__.
+
+In terms of __genders__, there is an equal number of males and females taking part in this survey, with the latter group (483) is a slightly more than the former one (459). The third group of "Other" gender made up a humble statistic of 6 people.
+
+In terms of __age groups__, the youngest group of respondents who are from 18 to 39 years old was significantly larger than the other two groups, with a gap as wide as 100 respondents, making up approximately 20% - 25% of the total people in each group. This may be owing to the fact that young adults are more technical savvy than their older counterparts, thus they have a greater tendency to engage in online surveys and studies similar to the CAMH research. However, it still requires further analysis to determine whether or not this difference carries any significance.
+
+### Investigating the difference between the drinking and not drinking groups
+
+* Investigating into the population who drink from the responses, we can see that the majority of people who participated in this survey drink alcohol. 
+* Nevertheless, it is interesting to see that the number of males and females in each drinking and not drinking group is not significantly different.
+* Among people who drink, the average days on drinking in the past 7 days before taking the survey is ___mean(x)=1.99___. 
+* The majority of people reported that they do not drink more or less within the past 7 days, but a considerable number of people recalled to drink a slightly more during the same period. 
+* Females are observed to have the tendency to be nervous and worried more than their male counterparts.
+
+```{r, results='hide'}
+df_2 <- camh_label_new[,c("gender","alcohol_drink_cat")]
+
+df_2aa <- df_2[df_2$alcohol_drink_cat == "Drinking",]
+df_2bb <- df_2[df_2$alcohol_drink_cat == "Not drinking",]
+
+df_2a <- df_2aa %>%
+  group_by(gender) %>%
+  tally(name = "people") %>%
+  mutate(pct_a=round(people/sum(people),3)) %>%
+  arrange(desc(pct_a))
+
+
+df_2b <- df_2bb %>%
+  group_by(gender) %>%
+  tally(name = "people") %>%
+  mutate(pct_b=round(people/sum(people),3)) %>%
+  arrange(desc(pct_b))
+
+tab_2a <- as.data.frame(df_2a)
+tab_2b <- as.data.frame(df_2b)
+```
+
+```{r Table14}
+kable(tab_2a, caption = "Respondents who drink") %>%
+  kable_classic() %>%
+  kable_styling(full_width = T, position = "left") %>%
+  add_header_above(bold = TRUE, align = "c", c(" " = 1, "Drinkers" = 2))
+```
+
+```{r Table15}
+kable(tab_2b, caption = "Respondents who do not drink") %>%
+  kable_classic() %>%
+  kable_styling(full_width = T, position = "left") %>%
+  add_header_above(bold = TRUE, align = "c", c(" " = 1, "Non drinkers" = 2))
+```
+
+```{r "create the data set for people who drink", include=TRUE, results='hide'}
+df_3 <- camh_label[,c("gender","alcohol_drink","alcohol_frq_factored","nervous_frq_factored","not_stop_worry_factored","worry_diff_factored")]
+df_3 <- subset(df_3, !rowSums(df_3 == 99))
+
+df_30 <- df_3[df_3$alcohol_drink == 0,]
+df_37 <- df_3[df_3$alcohol_drink == 7,]
+
+```
+
+```{r Figure3, fig.cap= "Graph of drinking status of survey respondents" , fig.width=15, fig.height=8}
+graph3 <- df_2a %>% 
+  ggplot(aes(x="", y=pct_a, fill=gender)) +
+  geom_bar(stat="identity", width = 1, color="white") +
+  coord_polar("y", start=0) +
+  labs(title = "Respondents who drink alcohol") +
+  geom_text(aes(label=paste0(pct_a*100,"%")), position = position_stack(vjust = 0.5), size=7) +
+  theme_hc() + scale_fill_hc()
+graph4 <- df_2b %>% 
+  ggplot(aes(x="", y=pct_b, fill=gender)) +
+  geom_bar(stat="identity", width = 1, color="white") +
+  coord_polar("y", start=0) +
+  labs(title = "Respondents who do not drink alcohol") +
+  geom_text(aes(label=paste0(pct_b*100,"%")), position = position_stack(vjust = 0.5), size=7) +
+  theme_hc() + scale_fill_hc()
+multiplot(graph3, graph4, layout=matrix(c(1,2), nrow=1, byrow=TRUE))
+
+graph5 <- 
+  ggplot(df_3, aes(x=alcohol_drink)) +
+  geom_histogram(binwidth=1, fill="#009E73") +
+  geom_vline(aes(xintercept=mean(alcohol_drink)), color="red", linetype="dashed") +
+  geom_text(aes(label = after_stat(count)), inherit.aes = TRUE, stat='count', vjust=-1) +
+  xlab("Days") +
+  ylab("Frequency") +
+  ggtitle("Days of drinking in the past 7 days") + 
+  theme_hc() + scale_fill_hc()
+graph6 <- 
+  ggplot(df_3, aes(x = alcohol_frq_factored, fill = gender)) +
+  geom_bar() +
+  geom_text(aes(label = after_stat(count)), inherit.aes = TRUE, stat='count', vjust=-1) +
+  facet_wrap(~ gender, scales = "free_x", shrink = TRUE) +
+  labs(x = "Gender", y = "Number of respondents", fill = "Gender") +
+  labs(title = "Frequency of alcohol consumption changes by genders") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_hc() + scale_fill_hc()
+show(graph5)
+show(graph6)
+```
+
+
+### The association of _Binge drinking_ and stress level in respondents
+
+* A closer look into people who did not drink during the past 7 days and who drank every day regarding their stress frequency
+* Overall, there is no significant difference between the two groups from observing the graphs
+* Nonetheless, the number of people who experienced nervousness and worries for several days in the binge-drinking group accounted for the largest group. 
+* In contrast, for people who did not drink, they appeared to do not experience any episodes of anxiety
+* From the graphs, people who binge_drinking might experience longer periods of stress than people who did not drink alcohol. However, more investigation is still needed to make the association of _Binge drinking_ and stress level in respondents clearer
+
+```{r Table16}
+kable(frq(df_3$alcohol_drink, out = "t"), caption = "The structure of the number of days people drink") %>%
+  kable_classic() %>%
+  kable_styling(full_width = F, position = "left") %>%
+  add_header_above(bold = TRUE, align = "c")
+```
+
+
+```{r, include = FALSE, echo = FALSE}
+graph7 <-
+  ggplot(df_3, aes(x = nervous_frq_factored, fill= gender)) +
+  geom_bar() +
+  geom_text(aes(label = after_stat(count)), inherit.aes = TRUE, stat='count', vjust=-1) +
+  facet_wrap(~ gender, scales = "free_x", shrink = TRUE) +
+  labs(x = "Gender", y = "Number of respondents", fill = "Gender") +
+  labs(title = "Nervous frequency among respondents") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_hc() + scale_fill_hc()
+graph8 <-
+  ggplot(df_3, aes(x = not_stop_worry_factored, fill= gender)) +
+  geom_bar() +
+  geom_text(aes(label = after_stat(count)), inherit.aes = TRUE, stat='count', vjust=-1) +
+  facet_wrap(~ gender, scales = "free_x", shrink = TRUE) +
+  labs(x = "Gender", y = "Number of respondents", fill = "Gender") +
+  labs(title = "Not stop being worried among respondents") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_hc() + scale_fill_hc()
+graph9 <-
+  ggplot(df_3, aes(x = worry_diff_factored, fill= gender)) +
+  geom_bar() +
+  geom_text(aes(label = after_stat(count)), inherit.aes = TRUE, stat='count', vjust=-1) +
+  facet_wrap(~ gender, scales = "free_x", shrink = TRUE) +
+  labs(x = "Gender", y = "Number of respondents", fill = "Gender") +
+  labs(title = "Worries about different things among respondents") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_hc() + scale_fill_hc()
+graph7a <- 
+  ggplot(df_30, aes(x = nervous_frq_factored)) +
+  geom_bar(fill = "azure3") +
+  geom_text(aes(label = after_stat(count)), inherit.aes = TRUE, stat='count', vjust=-1) +
+  labs(x = "Nervous frequency", y = "Number of respondents", fill = "Nervous frequency") +
+  labs(title = "Nervous frequency among people who do not drink") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_hc() + scale_fill_hc()
+graph7b <- 
+  ggplot(df_30, aes(x = not_stop_worry_factored)) +
+  geom_bar(fill = "azure3") +
+  geom_text(aes(label = after_stat(count)), inherit.aes = TRUE, stat='count', vjust=-1) +
+  labs(x = "Not being able to stop worrying frequency", y = "Number of respondents", fill = "Nervous frequency") +
+  labs(title = "Worry frequency among people who do not drink") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_hc()
+graph7c <- 
+  ggplot(df_30, aes(x = worry_diff_factored)) +
+  geom_bar(fill = "azure3") +
+  geom_text(aes(label = after_stat(count)), inherit.aes = TRUE, stat='count', vjust=-1) +
+  labs(x = "Worry about different things", y = "Number of respondents", fill = "Worry about different things") +
+  labs(title = "Worries among people who do not drink") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_hc()
+graph8a <- 
+  ggplot(df_37, aes(x = nervous_frq_factored)) +
+  geom_bar(fill = "aquamarine4") +
+  geom_text(aes(label = after_stat(count)), inherit.aes = TRUE, stat='count', vjust=-1) +
+  labs(x = "Nervous frequency", y = "Number of respondents", fill = "Nervous frequency") +
+  labs(title = "Nervous frequency among people who binge drinking") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_hc()
+graph8b <- 
+  ggplot(df_37, aes(x = not_stop_worry_factored)) +
+  geom_bar(fill = "aquamarine4") +
+  geom_text(aes(label = after_stat(count)), inherit.aes = TRUE, stat='count', vjust=-1) +
+  labs(x = "Not being able to stop worrying frequency", y = "Number of respondents", fill = "Nervous frequency") +
+  labs(title = "Worry frequency among people who binge drinking") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_hc()
+graph8c <- 
+  ggplot(df_30, aes(x = worry_diff_factored)) +
+  geom_bar(fill = "aquamarine4") +
+  geom_text(aes(label = after_stat(count)), inherit.aes = TRUE, stat='count', vjust=-1) +
+  labs(x = "Worry about different things", y = "Number of respondents", fill = "Worry about different things") +
+  labs(title = "Worries among people who binge drinking") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme_hc()
+```
+
+```{r Figure4, fig.cap= "Stress frequency among respondents", fig.height= 8}
+show(graph7)
+show(graph8)
+show(graph9)
+```
+
+
+
+```{r Figure5, fig.cap= "Stress levels between people who did not drink and who binged drinking", fig.width=15, fig.height= 8}
+multiplot(graph7a, graph7b, graph7c, layout=matrix(c(1,2,3), nrow=1, byrow=TRUE))
+multiplot(graph8a, graph8b, graph8c, layout=matrix(c(1,2,3), nrow=1, byrow=TRUE))
+```
+
+# CONCLUSION
+
+In conclusion, I would like to summarize my process for this analytic report:
+
+1. I studied the data, the datamap, and filtered the 17 variables of interest
+2. I evaluated n/a and anomalous values, weighing their impact against the value of the data set and subsequent analysis. For example, I maintained the value of 99 as "Not drinking" and used it for analysis. On the other hand, I removed values corresponding to option "Preferred not to answer" as they would not contribute to insights
+3. I recoded the values using different methods - the factor form and the direct recoding - with respect to their nature, demographic or non-demographic values
+4. I used different approaches - tables and graphs - to generate insights from the data set
+5. Summary of findings:
+  
+    * There are only 6 cases of COVID-19 positive out of 954 observations, making around 0.6% of the population studied
+    * There are equal numbers of male and female respondents
+    * The larger group of respondents is the youngest group of people from 18 to 39 years old
+    * Respondents who drink, reported to drink an average of 2 days during the past 7 days before taking the survey
+    * Females showed considerable tendencies to experience nervousness and worries more frequent than males. However, the relationship between this mental issues and COVID-19 need more investigation
+    * There is no significant difference between people who did not drink during the past 7 days and people who binged drinking the same period of time
+    * People who binged drinking might experience more prolonged nervous episodes but more investigation required before coming to a definitive conclusion
+
+# REFERENCE
+[1] COVID-19 national survey dashboard. (n.d.). CAMH. https://www.camh.ca/en/health-info/mental-health-and-covid-19/covid-19-national-survey
