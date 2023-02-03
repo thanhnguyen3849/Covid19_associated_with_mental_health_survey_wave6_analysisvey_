@@ -1,11 +1,8 @@
 ---
 title: "__Examining the Impact of COVID-19 on Mental Health and Substance Use among Canadians__"
-subtitle: "__Assignment 1 | R markdown__"
 author:
   name: "Author: Le Thanh Nguyen"
   affiliation: |
-    * MSc eHealth program 
-    * DeGroote School of Business, McMaster University 
     * Github page: https://github.com/thanhnguyen3849 
 date: "`r format(Sys.time(), '%d %B %Y')`" 
 output:
